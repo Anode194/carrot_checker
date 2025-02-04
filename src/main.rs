@@ -1,8 +1,11 @@
 use clap::Parser;
 use std::collections::HashMap;
+//use std::fs::File;
 use std::fs;
+use std::io::prelude::*;
+use std::io::Error;
+use std::path::Path;
 use std::process;
-
 //TODO: add the rest of the field values
 
 #[derive(Default, Parser, Debug)]
@@ -11,23 +14,50 @@ struct Arguments {
 }
 
 #[allow(unused_mut)]
-fn main() {
-    // get the file from the command line
-    let args = Arguments::parse();
-    //println!("{:?}", args);
-    let data = fs::read_to_string(args.calpads).expect("unable to read the provided file.");
-    // break the file into a vec of lines as strings.
+fn check_carrot(rules: &HashMap<String, i32>, path: &Path) -> Result<String, Error> {
+    let mut filetype: String = "".to_string(); // type of calpads file read from the first 4 characters of the file.
+    let mut results: String;// = "".to_string();
+    //println!("{}",path.display());
+    let mut data = fs::read_to_string(path)?;
+    println!("{}",data);
+
+    //let mut cfile = File::open(&path)?;
+    let mut columns;
+    //cfile.read_to_string(&mut data)?;
+
     let lines: Vec<&str> = data.lines().collect();
 
     // get the filetype from the files first column.
-    let mut filetype: String;
     if let Some(i) = lines[0].get(0..4) {
         filetype = i.to_string();
+        println!("here");
     } else {
-        println!("could not read the filetype from the file. The file is out of specification.");
-        process::exit(1);
+        results = format!(
+            "could not read the filetype from {}. The file is out of specification.\n",
+            path.display()
+        )
     }
 
+    for (index, line) in lines.iter().enumerate() {
+        columns = line.split('^').count() as i32;
+        if columns != *rules.get(&filetype).unwrap() {
+            results = format!(
+                "The {} provided did not have the correct number of columns on line {}",
+                path.display(),
+                index + 1
+            );
+        }
+    }
+    results = format!(
+        "{} you entered is valid. number of columns expected for the {} CALPADS file is {}",
+        path.display(),
+        &filetype,
+        rules.get(&filetype).unwrap() + 1
+    );
+
+    Ok(results)
+}
+fn main() -> Result<(), Error> {
     // valid column totals adjust these numbers if any values get updated. the file spec is located
     // here https://www.cde.ca.gov/ds/sp/cl/systemdocs.asp
     let mut column_rules = HashMap::new();
@@ -51,25 +81,42 @@ fn main() {
     column_rules.insert("MEET".to_string(), 18);
     column_rules.insert("SERV".to_string(), 16);
 
-    let mut columns;
-    for (index, line) in lines.iter().enumerate() {
-        columns = line.split('^').count() as i32;
-        if columns != *column_rules.get(&filetype).unwrap() {
-            println!(
-                "The file provided did not have the correct number of columns on line {}",
-                index + 1
-            );
-            process::exit(1);
-        }
+    //final results of the files that will be printed.
+    let mut results: String = "".to_string();
+    // get the file or folder from the command line
+    let args = Arguments::parse();
+    // create a path to run checks before reading any files or directories.
+    let filepath: &Path = Path::new(&args.calpads);
+
+    if !filepath.exists() {
+        println!("The file or folder path provided does not exist.");
+        process::exit(1);
     }
-    println!(
-            "the CALPADS file you entered is valid. number of columns expected for the {} CALPADS file is {}", 
-            &filetype, 
-            column_rules.get(&filetype).unwrap() + 1
-        );
+
+    if filepath.is_dir() {
+        for file in filepath
+            .read_dir()
+            .expect("failed to read the directory given")
+        {
+            if let Ok(file) = file {
+                if !file.path().is_dir() {
+                    results.push_str(&check_carrot(&column_rules, &file.path())?);
+                }
+            }
+        }
+    } else {
+        results = check_carrot(&column_rules, &filepath)?
+    }
+
+    println!("{}", results);
+    Ok(())
 }
 
-/* Pass file path into program.
+/* Pass file / or folder path into program.
+ * program determines if its a file or a folder.
+ * If the path is a folder it runs the validate function on each entry of the folder.
+ * If a file is a subfolder it is ignored.
+ * If it is a file then the validate function is called on the single file.
  * file is read into a string.
  * Break string into a vec based on the \r
  * Count the Carrot symbols in each string
