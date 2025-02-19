@@ -1,7 +1,6 @@
 use clap::Parser;
 use std::collections::HashMap;
-//use std::fs::File;
-use std::fs;
+use std::fs::File;
 use std::io::prelude::*;
 use std::io::Error;
 use std::path::Path;
@@ -13,13 +12,15 @@ struct Arguments {
     calpads: String,
 }
 
+
 #[allow(unused_mut)]
 fn check_carrot(rules: &HashMap<String, i32>, path: &Path) -> Result<String, Error> {
-    let mut filetype: String = "".to_string(); // type of calpads file read from the first 4 characters of the file.
-    let mut results: String;// = "".to_string();
-    //println!("{}",path.display());
-    let mut data = fs::read_to_string(path)?;
-    println!("{}",data);
+    let mut filetype: String; 
+    let mut results: String;
+    let mut file = File::open(&path)?;
+    let mut dirty_buffer = Vec::new();
+    file.read_to_end(&mut dirty_buffer)?;
+    let mut data = String::from_utf8_lossy(&dirty_buffer);
 
     //let mut cfile = File::open(&path)?;
     let mut columns;
@@ -30,27 +31,32 @@ fn check_carrot(rules: &HashMap<String, i32>, path: &Path) -> Result<String, Err
     // get the filetype from the files first column.
     if let Some(i) = lines[0].get(0..4) {
         filetype = i.to_string();
-        println!("here");
     } else {
         results = format!(
             "could not read the filetype from {}. The file is out of specification.\n",
-            path.display()
-        )
+            path.file_name().unwrap().to_str().unwrap(),
+        );
+            return Ok(results)
     }
 
     for (index, line) in lines.iter().enumerate() {
         columns = line.split('^').count() as i32;
         if columns != *rules.get(&filetype).unwrap() {
             results = format!(
-                "The {} provided did not have the correct number of columns on line {}",
-                path.display(),
-                index + 1
+                "{} did not have the correct number of columns on line {}\n
+                columns expected: {} columns found: {}\n",
+                path.file_name().unwrap().to_str().unwrap(),
+                index + 1,
+                *rules.get(&filetype).unwrap(),
+                columns
             );
+            return Ok(results)
+
         }
     }
     results = format!(
-        "{} you entered is valid. number of columns expected for the {} CALPADS file is {}",
-        path.display(),
+        "{} you entered is valid. number of columns expected for the {} CALPADS file is {}\n",
+        path.file_name().unwrap().to_str().unwrap(),
         &filetype,
         rules.get(&filetype).unwrap() + 1
     );
@@ -61,25 +67,27 @@ fn main() -> Result<(), Error> {
     // valid column totals adjust these numbers if any values get updated. the file spec is located
     // here https://www.cde.ca.gov/ds/sp/cl/systemdocs.asp
     let mut column_rules = HashMap::new();
-    column_rules.insert("SELA".to_string(), 15);
-    column_rules.insert("SPRG".to_string(), 25);
-    column_rules.insert("SENR".to_string(), 34);
-    column_rules.insert("SINF".to_string(), 49);
-    column_rules.insert("SDEM".to_string(), 30);
-    column_rules.insert("SASS".to_string(), 20);
-    column_rules.insert("CRSC".to_string(), 35);
-    column_rules.insert("CRSE".to_string(), 35);
-    column_rules.insert("SCTE".to_string(), 13);
-    column_rules.insert("STAS".to_string(), 22);
-    column_rules.insert("PSTS".to_string(), 14);
-    column_rules.insert("SINC".to_string(), 16);
-    column_rules.insert("SIRS".to_string(), 16);
-    column_rules.insert("SOFF".to_string(), 14);
-    column_rules.insert("WBLR".to_string(), 14);
-    column_rules.insert("SWDS".to_string(), 12);
-    column_rules.insert("PLAN".to_string(), 32);
-    column_rules.insert("MEET".to_string(), 18);
-    column_rules.insert("SERV".to_string(), 16);
+    column_rules.insert("SENR".to_string(), 35);
+    column_rules.insert("SINF".to_string(), 50);
+    column_rules.insert("SPRG".to_string(), 26);
+    column_rules.insert("SELA".to_string(), 16);
+    column_rules.insert("SDEM".to_string(), 31);
+    column_rules.insert("SASS".to_string(), 21);
+    column_rules.insert("CRSE".to_string(), 36);
+    column_rules.insert("CRSC".to_string(), 36);
+    column_rules.insert("SCSC".to_string(), 21);
+    column_rules.insert("SCSE".to_string(), 21);
+    column_rules.insert("SCTE".to_string(), 14);
+    column_rules.insert("STAS".to_string(), 23);
+    column_rules.insert("PSTS".to_string(), 15);
+    column_rules.insert("SINC".to_string(), 17);
+    column_rules.insert("SIRS".to_string(), 17);
+    column_rules.insert("SOFF".to_string(), 15);
+    column_rules.insert("WBLR".to_string(), 15);
+    column_rules.insert("SWDS".to_string(), 13);
+    column_rules.insert("PLAN".to_string(), 33);
+    column_rules.insert("MEET".to_string(), 19);
+    column_rules.insert("SERV".to_string(), 17);
 
     //final results of the files that will be printed.
     let mut results: String = "".to_string();
